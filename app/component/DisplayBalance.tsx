@@ -32,8 +32,6 @@ export const DisplayBalance: React.FC<DisplayBalanceProps> = ({
 
   useEffect(() => {
     if (!isError && !isLoading) {
-      console.log(data, "from use dynamic balance");
-
       setBalance(data?.formatted);
       onSendValue({ data: data?.formatted, direction });
     }

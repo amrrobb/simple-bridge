@@ -1,16 +1,20 @@
 "use client";
 
-import { useAccount, useWalletClient } from "wagmi";
+import { useAccount, useSwitchChain, useWalletClient } from "wagmi";
 import Image from "next/image";
-import { Button, Switch, Spinner } from "@material-tailwind/react";
-import { ArrowsUpDownIcon, WalletIcon } from "@heroicons/react/24/solid";
+import { Button, Switch, Spinner, Tooltip } from "@material-tailwind/react";
+import {
+  ArrowsUpDownIcon,
+  WalletIcon,
+  InformationCircleIcon,
+} from "@heroicons/react/24/solid";
 import { useEffect, useState } from "react";
 import { Squid } from "@0xsquid/sdk";
 import { ChainData, Token as TokenData } from "@0xsquid/sdk/dist/types";
-import { formatBalance } from "./utils";
+import { formatBalance } from "../utils";
 
 import { ethers } from "ethers";
-import { MenuChain, MenuToken, DisplayBalance } from "./component";
+import { MenuChain, MenuToken, DisplayBalance } from ".";
 import debounce from "lodash.debounce";
 import {
   arbitrum,
@@ -23,8 +27,8 @@ import {
   baseGoerli,
   optimismGoerli,
 } from "wagmi/chains";
-import { convertDecimalToInteger, convertIntegerToDecimal } from "./utils";
-import { DirectionType, RouteData } from "./types";
+import { convertDecimalToInteger, convertIntegerToDecimal } from "../utils";
+import { DirectionType, RouteData } from "../types";
 import Big from "big.js";
 
 // Mainnet: Ethereum,, Optimism,, Arbitrum, Base,
@@ -47,17 +51,18 @@ const symbolEth = "eth";
 const symbolUsdc = "usdc";
 const symbolUsdt = "usdt";
 
-const isMainnet = process.env.NEXT_PUBLIC_USING_MAINNET === "true";
+const isTestnet = process.env.NEXT_PUBLIC_USING_TESTNET === "true";
 // baseUrl:
-const baseUrl = isMainnet
+const baseUrl = !isTestnet
   ? "https://v2.api.squidrouter.com"
   : "https://testnet.v2.api.squidrouter.com";
 const integratorId = process.env.NEXT_PUBLIC_INTEGRATOR_ID!;
 
-const validChainIds: string[] = isMainnet ? CHAIN_IDS : CHAIN_ID_TESTS;
+const validChainIds: string[] = !isTestnet ? CHAIN_IDS : CHAIN_ID_TESTS;
 
 export const SwapForm = () => {
-  const { data: walletClient, isError, isLoading } = useWalletClient();
+  const { switchChain } = useSwitchChain();
+  const { data: walletClient } = useWalletClient();
 
   // Address
   const { address } = useAccount();
@@ -114,6 +119,13 @@ export const SwapForm = () => {
       fromTokenAmount.length > 1 &&
       !routeLoading
     ) {
+      return true;
+    }
+    return false;
+  }
+
+  function isChainValid(): boolean {
+    if (fromChain!.chainId === walletClient!.chain.id.toString()) {
       return true;
     }
     return false;
@@ -183,15 +195,11 @@ export const SwapForm = () => {
       quoteOnly: false,
     };
 
-    // Get the swap route using Squid SDK
-    console.log(params, "params check");
-
     try {
       const { route, requestId } = await squid!.getRoute(params);
       const estimate = route.estimate;
       setRouteLoading(false);
 
-      console.log(route);
       setRoute(route);
       setRquestId(requestId);
 
@@ -236,6 +244,10 @@ export const SwapForm = () => {
     }
   };
 
+  const handleSwithChain = () => {
+    switchChain({ chainId: Number(fromChain!.chainId!) });
+  };
+
   const handleReceiveMenuChainValue = debounce(
     ({ data, direction }: { data: ChainData; direction: DirectionType }) => {
       function selectIdx(chainId: string) {
@@ -261,8 +273,6 @@ export const SwapForm = () => {
 
   const handleReceiveMenuTokenValue = debounce(
     ({ data, direction }: { data: TokenData; direction: DirectionType }) => {
-      console.log(data, "token data");
-
       if (direction === "from") {
         setFromToken(data);
       }
@@ -281,11 +291,9 @@ export const SwapForm = () => {
     direction: DirectionType;
   }) => {
     if (direction === "from") {
-      console.log("handle from balance");
       setFromTokenBalance(data);
     }
     if (direction === "to") {
-      console.log("handle to balance");
       setToTokenBalance(data);
     }
   };
@@ -296,11 +304,10 @@ export const SwapForm = () => {
     setToChain(tempChain);
   }, 100);
 
-  const squidFunc = async () => {
+  const initChain = async () => {
     try {
       // instantiate the SDK
       await squid.init();
-
       fetchChains();
 
       await handleFromTokens(validChainIds[0]);
@@ -340,8 +347,6 @@ export const SwapForm = () => {
     await squid.init();
     const tokens = fetchTokens(chainId);
 
-    console.log(tokens);
-
     setValidFromTokens(tokens);
     setFromToken(tokens[0]);
   };
@@ -353,13 +358,9 @@ export const SwapForm = () => {
     setToToken(tokens[0]);
   };
 
-  const handleTest = () => {
-    console.log("clicked on swap button");
-  };
-
   useEffect(() => {
-    squidFunc();
-  }, [walletClient]);
+    initChain();
+  }, []);
 
   useEffect(() => {
     const amount = new Big(fromTokenAmount);
@@ -600,9 +601,19 @@ export const SwapForm = () => {
             width={15}
             height={15}
           />
-          <p className="text-gray-500">
-            {isRouteValid() ? `$ ${calculateFeeCosts()}` : "-"}
-          </p>
+
+          {isRouteValid() ? (
+            <div className="flex items-center">
+              <p className="text-gray-500 mr-2">$ {calculateFeeCosts()}</p>
+              <div>
+                <Tooltip content="Total fee costs estimation to bridge">
+                  <InformationCircleIcon className="text-gray-500 w-5 h-5" />
+                </Tooltip>
+              </div>
+            </div>
+          ) : (
+            <p>-</p>
+          )}
         </div>
 
         <div className="mb-2 mt-5">
@@ -616,20 +627,28 @@ export const SwapForm = () => {
             >
               Insufficient Amount
             </Button>
-          ) : (
+          ) : fromChain && walletClient && isChainValid() ? (
             <Button
               variant="outlined"
               className="block w-full bg-indigo-600 py-4 hover:-translate-y-1 transition-all duration-500 text-white font-semibold capitalize text-lg"
               size="lg"
               disabled={routeLoading}
               onClick={() => handleExecuteTx()}
-              // onClick={handleTest}
             >
               {!routeLoading ? (
                 "Bridge"
               ) : (
                 <Spinner className="mx-auto h-6 w-6" />
               )}
+            </Button>
+          ) : (
+            <Button
+              variant="outlined"
+              className="block w-full bg-indigo-600 py-4 hover:-translate-y-1 transition-all duration-500 text-white font-semibold capitalize text-lg"
+              size="lg"
+              onClick={handleSwithChain}
+            >
+              Switch Network
             </Button>
           )}
         </div>

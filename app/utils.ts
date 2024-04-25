@@ -1,5 +1,4 @@
 import BigNumber from "bignumber.js";
-import Big from "big.js";
 
 export const formatBalance = (balance: string | number): string => {
   // Convert balance to string if it's a number

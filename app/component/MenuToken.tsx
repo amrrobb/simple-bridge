@@ -106,9 +106,10 @@ export const MenuToken: React.FC<MenuChainProps> = ({
                   size="xs"
                   className="mx-3"
                 />
-                <div>
-                  <div>{item.symbol.toString()}</div>
-                  <div>{item.name.toString()}</div>
+
+                <div className="leading-tight">
+                  <p className="text-base">{item.symbol.toString()}</p>
+                  <p className="text-sm">{item.name.toString()}</p>
                 </div>
               </MenuItem>
             ))}

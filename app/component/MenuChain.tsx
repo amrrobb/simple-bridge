@@ -110,7 +110,7 @@ export const MenuChain: React.FC<MenuChainProps> = ({
                   size="xs"
                   className="mx-3"
                 />
-                {item.networkName.toString()}
+                <p className="text-base">{item.networkName.toString()}</p>
               </MenuItem>
             ))}
           </MenuList>
